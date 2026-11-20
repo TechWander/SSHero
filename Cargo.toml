@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["backend"]
+# Tauri v2 hard-locks on webkit2gtk-4.1 (Ubuntu 22.04+ / Debian 12+).
+# On older distros, use the Electron wrapper under apps/electron instead.
+# Enable on a machine that has 4.1:
+#   members = ["backend", "apps/desktop"]
+
+[profile.release]
+lto = "thin"

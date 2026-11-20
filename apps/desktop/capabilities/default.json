@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../../../schemas/capability-schema.json",
+  "identifier": "default",
+  "description": "Main window: events (drag-drop) and save/open dialogs",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:webview:default",
+    "core:event:default",
+    "dialog:default"
+  ]
+}

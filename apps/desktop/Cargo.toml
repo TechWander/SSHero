@@ -1,0 +1,15 @@
+[package]
+name = "sshero-desktop"
+version = "0.2.0"
+edition = "2021"
+description = "Tauri desktop shell: embeds the sshero backend in-process and hosts the Vue UI"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+sshero-backend = { path = "../../backend" }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"

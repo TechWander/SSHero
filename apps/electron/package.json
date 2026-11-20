@@ -1,0 +1,72 @@
+{
+  "name": "sshero-electron",
+  "productName": "SSHero",
+  "version": "0.2.0",
+  "private": true,
+  "main": "main.cjs",
+  "description": "Electron desktop shell: spawns the Rust sshero backend as a child process and hosts the Vue UI in a native window.",
+  "author": {
+    "name": "SSHero",
+    "email": "sshero@local"
+  },
+  "homepage": "https://github.com/TechWander/SSHero",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "prepack": "bash prepack.sh all",
+    "dist:linux": "bash prepack.sh linux && electron-builder --linux",
+    "dist:win": "bash prepack.sh win && electron-builder --win",
+    "dist:mac": "bash prepack.sh mac && electron-builder --mac",
+    "dist": "bash prepack.sh linux && electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.sshero.desktop",
+    "productName": "SSHero",
+    "asar": true,
+    "files": ["main.cjs", "preload.cjs", "package.json"],
+    "linux": {
+      "target": ["AppImage", "deb", "tar.gz"],
+      "icon": "build/icon.png",
+      "category": "Development",
+      "maintainer": "sshero <sshero@local>",
+      "extraResources": [
+        { "from": "frontend-dist/", "to": "frontend-dist/" },
+        { "from": "bin/", "to": "bin/", "filter": ["sshero-backend", "sshero-backend-linux-*"] }
+      ],
+      "artifactName": "sshero-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.ico",
+      "extraResources": [
+        { "from": "frontend-dist/", "to": "frontend-dist/" },
+        { "from": "bin/", "to": "bin/", "filter": ["sshero-backend.exe", "sshero-backend-win32-*.exe"] }
+      ],
+      "artifactName": "sshero-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SSHero",
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "extraResources": [
+        { "from": "frontend-dist/", "to": "frontend-dist/" },
+        { "from": "bin/", "to": "bin/", "filter": ["sshero-backend", "sshero-backend-darwin-*"] }
+      ],
+      "artifactName": "sshero-${version}-${arch}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33",
+    "electron-builder": "^25"
+  }
+}
