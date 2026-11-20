@@ -1,0 +1,168 @@
+name: Release
+
+# Build the Electron desktop installers and publish them as a GitHub Release.
+# Triggered by pushing a version tag (e.g. v0.2.0); can also be run manually
+# via workflow_dispatch (set the tag input to an existing tag like v0.2.0).
+#
+# Authentication uses the runner's automatic GITHUB_TOKEN (permissions:
+# contents: write) — no personal access token is supplied by any human, the
+# same pattern the YourFS release workflow uses.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish, e.g. v0.2.0"
+        required: true
+        default: "v0.2.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: build (Linux x64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build backend (host x86_64)
+        run: cargo build --release -p sshero-backend
+
+      - name: Build frontend SPA
+        run: |
+          (cd frontend && npm ci && npm run build)
+          rm -rf apps/electron/frontend-dist
+          cp -r frontend/dist apps/electron/frontend-dist
+
+      - name: Stage backend binaries
+        run: bash apps/electron/prepack.sh linux
+
+      - name: Package Linux installers (AppImage + deb + tar.gz)
+        run: |
+          (cd apps/electron && npm ci && npx electron-builder --linux --x64)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-dist
+          path: |
+            apps/electron/dist/*.AppImage
+            apps/electron/dist/*.deb
+            apps/electron/dist/*.tar.gz
+          if-no-files-found: error
+
+  build-windows:
+    name: build (Windows x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build backend (native MSVC)
+        shell: bash
+        run: cargo build --release -p sshero-backend
+
+      - name: Build frontend SPA
+        shell: bash
+        run: |
+          (cd frontend && npm ci && npm run build)
+          rm -rf apps/electron/frontend-dist
+          cp -r frontend/dist apps/electron/frontend-dist
+
+      - name: Stage backend binary
+        shell: bash
+        run: |
+          mkdir -p apps/electron/bin
+          cp target/release/sshero-backend.exe apps/electron/bin/sshero-backend.exe
+          cp target/release/sshero-backend.exe apps/electron/bin/sshero-backend-win32-x64.exe
+
+      - name: Package Windows installer (NSIS)
+        shell: bash
+        run: |
+          (cd apps/electron && npm ci && npx electron-builder --win --x64)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-dist
+          path: apps/electron/dist/*.exe
+          if-no-files-found: error
+
+  release:
+    name: publish GitHub Release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: "*-dist"
+          merge-multiple: true
+
+      - name: Assemble assets + checksums
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          find artifacts -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.tar.gz' -o -name '*.exe' \) -exec cp {} out/ \;
+          ( cd out && sha256sum * > SHA256SUMS.txt )
+          ls -1 out
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "SSHero ${{ steps.tag.outputs.tag }}"
+          body: |
+            ## SSHero ${{ steps.tag.outputs.tag }} — Desktop SSH File Manager
+
+            Electron shell + Rust backend (russh/SFTP/PTY) + Vue 3 frontend.
+
+            ### Highlights in this release
+            - Transparent application icon (no white tile around it on the Windows/Linux taskbar)
+            - Private-key path pre-filled per OS, with existence detection and a native file browser
+            - Drag-and-drop: drag an item onto a breadcrumb segment to move it remotely; download progress shown
+            - Fixed the repeated "reinstall" prompt (dropped the portable target, NSIS installer only)
+            - Configurable data directory in the app settings, persisted and forwarded to backend `--data-dir`
+
+            ### Installers
+            | file | platform |
+            |------|----------|
+            | `sshero-0.2.0-x86_64.AppImage` | Linux (generic) |
+            | `sshero-0.2.0-amd64.deb` | Linux (Debian/Ubuntu) |
+            | `sshero-0.2.0-x64.tar.gz` | Linux (portable archive) |
+            | `sshero-0.2.0-x64.exe` | Windows (NSIS, unsigned — expect a one-time SmartScreen prompt) |
+
+            Verify with `sha256sum -c SHA256SUMS.txt`.
+          files: |
+            out/*.AppImage
+            out/*.deb
+            out/*.tar.gz
+            out/*.exe
+            out/SHA256SUMS.txt
+          make_latest: "true"
